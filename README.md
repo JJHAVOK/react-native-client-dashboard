@@ -1,3 +1,4 @@
+```mermaid
 graph TD
     subgraph MobileApp [Client Mobile App: React Native / Expo]
         UI[Native UI & Expo Router]
