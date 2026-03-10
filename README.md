@@ -1,5 +1,5 @@
 graph TD
-    subgraph Client Mobile App [React Native / Expo]
+    subgraph MobileApp [Client Mobile App: React Native / Expo]
         UI[Native UI & Expo Router]
         State[Zustand Auth Store]
         Storage[Expo SecureStore]
@@ -10,16 +10,16 @@ graph TD
         UI --> API_Client
     end
 
-    subgraph Client Web Storefront [Next.js]
+    subgraph WebApp [Client Web Storefront: Next.js]
         WebUI[Next.js App Router]
         WebAPI[Next.js API Routes]
     end
 
-    subgraph Staff Admin Panel [Next.js]
+    subgraph AdminApp [Staff Admin Panel: Next.js]
         AdminUI[Admin Dashboard]
     end
 
-    subgraph Backend Infrastructure [NestJS / Docker VPS]
+    subgraph Backend [Backend Infrastructure: NestJS / Docker VPS]
         Gateway[NestJS REST API]
         DB[(PostgreSQL Database)]
         
@@ -35,6 +35,6 @@ graph TD
     classDef web fill:#10b981,stroke:#fff,stroke-width:2px,color:#fff;
     classDef backend fill:#8b5cf6,stroke:#fff,stroke-width:2px,color:#fff;
     
-    class Client Mobile App,UI,State,Storage,API_Client mobile;
-    class Client Web Storefront,WebUI web;
-    class Backend Infrastructure,Gateway,DB backend;
+    class MobileApp,UI,State,Storage,API_Client mobile;
+    class WebApp,WebUI web;
+    class Backend,Gateway,DB backend;
