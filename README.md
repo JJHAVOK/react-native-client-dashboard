@@ -1,3 +1,6 @@
+<pre>
+
+Code snippet
 graph TD
     subgraph Client Mobile App [React Native / Expo]
         UI[Native UI &amp; Expo Router]
@@ -38,3 +41,4 @@ graph TD
     class Client Mobile App,UI,State,Storage,API_Client mobile;
     class Client Web Storefront,WebUI web;
     class Backend Infrastructure,Gateway,DB backend;
+</pre>
