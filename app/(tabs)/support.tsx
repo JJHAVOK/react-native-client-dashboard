@@ -1,26 +1,39 @@
-import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
-import { Link } from 'expo-router';
+import { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, RefreshControl } from 'react-native';
+import { Link, useFocusEffect, useRouter } from 'expo-router';
 import api from '../../lib/api';
 
 export default function SupportScreen() {
+  const router = useRouter();
   const [tickets, setTickets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    // Fetch tickets using your storefront endpoint
-    api.get('/customer/portal/tickets')
-      .then(res => setTickets(res.data))
-      .catch(err => console.log('Error fetching tickets:', err))
-      .finally(() => setLoading(false));
+  const fetchTickets = async () => {
+    try {
+      const res = await api.get('/customer/portal/tickets');
+      setTickets(res.data);
+    } catch (err) {
+      console.log('Error fetching tickets:', err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useFocusEffect(useCallback(() => { fetchTickets(); }, []));
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchTickets();
   }, []);
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Support Tickets</Text>
-        {/* We will wire up a "New Ticket" button later! */}
-        <TouchableOpacity style={styles.newButton}>
+        {/* Wired up the new ticket button! */}
+        <TouchableOpacity style={styles.newButton} onPress={() => router.push('/support/new')}>
           <Text style={styles.newButtonText}>+ New</Text>
         </TouchableOpacity>
       </View>
@@ -28,7 +41,10 @@ export default function SupportScreen() {
       {loading ? (
         <ActivityIndicator color="#0ea5e9" size="large" style={{ marginTop: 50 }} />
       ) : (
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0ea5e9" colors={['#0ea5e9']} />}
+        >
           {tickets.length === 0 ? (
             <Text style={styles.emptyText}>No support tickets found.</Text>
           ) : (
@@ -62,10 +78,7 @@ export default function SupportScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#09090b' },
-  header: { 
-    padding: 20, paddingTop: 10, borderBottomWidth: 1, borderBottomColor: '#27272a', 
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' 
-  },
+  header: { padding: 20, paddingTop: 10, borderBottomWidth: 1, borderBottomColor: '#27272a', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   headerTitle: { color: '#ffffff', fontSize: 24, fontWeight: 'bold' },
   newButton: { backgroundColor: '#18181b', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: '#27272a' },
   newButtonText: { color: '#0ea5e9', fontWeight: 'bold' },
@@ -75,7 +88,7 @@ const styles = StyleSheet.create({
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 },
   subject: { color: '#ffffff', fontSize: 16, fontWeight: 'bold', flex: 1, marginRight: 10 },
   badge: { backgroundColor: '#0ea5e9', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  badgeResolved: { backgroundColor: '#22c55e' }, // Green for resolved
+  badgeResolved: { backgroundColor: '#22c55e' },
   badgeText: { color: '#ffffff', fontSize: 10, fontWeight: 'bold' },
   ticketNumber: { color: '#71717a', fontSize: 12, marginBottom: 15 },
   footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#27272a', paddingTop: 12 },

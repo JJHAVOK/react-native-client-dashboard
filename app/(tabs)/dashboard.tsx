@@ -1,90 +1,125 @@
-import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { useAuthStore } from '../../store/authStore';
+import { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
-import api from '../../lib/api'; 
+import { Ionicons } from '@expo/vector-icons';
+import { useAuthStore } from '../../store/authStore';
+import api from '../../lib/api';
 
 export default function DashboardScreen() {
-  const { user, logout } = useAuthStore();
+  const { user } = useAuthStore();
   const router = useRouter();
-
+  
+  const [stats, setStats] = useState({ activeProjects: 0, openTickets: 0, recentOrders: 0 });
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({ projectsCount: 0, ticketsCount: 0, ordersCount: 0 });
+  const [refreshing, setRefreshing] = useState(false); // NEW REFRESH STATE
+
+  const fetchDashboardData = async () => {
+    try {
+      const [projectsRes, ticketsRes, ordersRes] = await Promise.all([
+        api.get('/customer/portal/projects'),
+        api.get('/customer/portal/tickets'),
+        api.get('/customer/portal/orders')
+      ]);
+
+      setStats({
+        activeProjects: projectsRes.data.filter((p: any) => p.status === 'ACTIVE').length,
+        openTickets: ticketsRes.data.filter((t: any) => t.status !== 'CLOSED' && t.status !== 'RESOLVED').length,
+        recentOrders: ordersRes.data.length
+      });
+    } catch (error) {
+      console.log('Error fetching dashboard data:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false); // Stop the refresh spinner
+    }
+  };
 
   useEffect(() => {
     fetchDashboardData();
   }, []);
 
-  const fetchDashboardData = async () => {
-    try {
-      // Using the exact endpoints from your Next.js web storefront!
-      const projectsRes = await api.get('/customer/portal/projects'); 
-      const ticketsRes = await api.get('/customer/portal/tickets');
-      const ordersRes = await api.get('/customer/portal/orders');
+  // THE PULL-TO-REFRESH HANDLER
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchDashboardData();
+  }, []);
 
-      setStats({
-        projectsCount: projectsRes.data?.length || 0,
-        ticketsCount: ticketsRes.data?.length || 0,
-        ordersCount: ordersRes.data?.length || 0,
-      });
-
-    } catch (error: any) {
-      console.log('API Error Fetching Dashboard Data:', error?.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleLogout = async () => {
-    await logout();
-    router.replace('/'); 
-  };
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#0ea5e9" />
+      </View>
+    );
+  }
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView 
+      style={styles.container}
+      contentContainerStyle={{ padding: 20 }}
+      // THE NATIVE REFRESH CONTROL
+      refreshControl={
+        <RefreshControl 
+          refreshing={refreshing} 
+          onRefresh={onRefresh} 
+          tintColor="#0ea5e9" // Spinner color for iOS
+          colors={['#0ea5e9']} // Spinner color for Android
+        />
+      }
+    >
       <View style={styles.header}>
-        <Text style={styles.welcomeText}>Welcome back,</Text>
-        <Text style={styles.nameText}>{user?.firstName || 'Client'}!</Text>
+        <Text style={styles.greeting}>Welcome back,</Text>
+        <Text style={styles.name}>{user?.firstName || 'Client'}!</Text>
       </View>
 
-      <View style={styles.statsContainer}>
-        {/* Projects Box */}
-        <View style={styles.statBox}>
-          {loading ? <ActivityIndicator color="#0ea5e9" /> : <Text style={styles.statNumber}>{stats.projectsCount}</Text>}
-          <Text style={styles.statLabel}>Active Projects</Text>
-        </View>
-        
-        {/* Tickets Box */}
-        <View style={styles.statBox}>
-          {loading ? <ActivityIndicator color="#0ea5e9" /> : <Text style={styles.statNumber}>{stats.ticketsCount}</Text>}
-          <Text style={styles.statLabel}>Support Tickets</Text>
-        </View>
+      <Text style={styles.sectionTitle}>Overview</Text>
+      
+      <View style={styles.grid}>
+        <TouchableOpacity style={styles.card} onPress={() => router.push('/projects')}>
+          <Ionicons name="briefcase-outline" size={32} color="#8b5cf6" style={styles.icon} />
+          <Text style={styles.cardNumber}>{stats.activeProjects}</Text>
+          <Text style={styles.cardLabel}>Active Projects</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.card} onPress={() => router.push('/support')}>
+          <Ionicons name="ticket-outline" size={32} color="#f59e0b" style={styles.icon} />
+          <Text style={styles.cardNumber}>{stats.openTickets}</Text>
+          <Text style={styles.cardLabel}>Open Tickets</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.card} onPress={() => router.push('/orders')}>
+          <Ionicons name="cube-outline" size={32} color="#10b981" style={styles.icon} />
+          <Text style={styles.cardNumber}>{stats.recentOrders}</Text>
+          <Text style={styles.cardLabel}>Total Orders</Text>
+        </TouchableOpacity>
       </View>
 
-      <View style={[styles.statsContainer, { paddingTop: 0 }]}>
-         {/* Orders Box */}
-         <View style={[styles.statBox, { width: '100%' }]}>
-          {loading ? <ActivityIndicator color="#22c55e" /> : <Text style={[styles.statNumber, { color: '#22c55e' }]}>{stats.ordersCount}</Text>}
-          <Text style={styles.statLabel}>Recent Orders</Text>
-        </View>
+      <View style={styles.actionSection}>
+        <Text style={styles.sectionTitle}>Quick Actions</Text>
+        <TouchableOpacity style={styles.actionButton} onPress={() => router.push('/support/new')}>
+          <Ionicons name="chatbubbles-outline" size={24} color="#fff" />
+          <Text style={styles.actionButtonText}>Start Live Chat</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.actionButton, { backgroundColor: '#27272a' }]} onPress={() => router.push('/settings')}>
+          <Ionicons name="settings-outline" size={24} color="#fff" />
+          <Text style={styles.actionButtonText}>Account Settings</Text>
+        </TouchableOpacity>
       </View>
-
-      <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-        <Text style={styles.logoutText}>Sign Out</Text>
-      </TouchableOpacity>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#09090b' },
-  header: { padding: 20, marginTop: 10 },
-  welcomeText: { color: '#a1a1aa', fontSize: 16 },
-  nameText: { color: '#fff', fontSize: 28, fontWeight: 'bold' },
-  statsContainer: { flexDirection: 'row', padding: 20, justifyContent: 'space-between' },
-  statBox: { backgroundColor: '#18181b', padding: 20, borderRadius: 12, width: '48%', borderWidth: 1, borderColor: '#27272a', alignItems: 'center' },
-  statNumber: { color: '#0ea5e9', fontSize: 32, fontWeight: 'bold' },
-  statLabel: { color: '#a1a1aa', marginTop: 5, fontSize: 14 },
-  logoutButton: { margin: 20, backgroundColor: '#ef4444', padding: 15, borderRadius: 8, alignItems: 'center' },
-  logoutText: { color: '#fff', fontWeight: 'bold' },
+  header: { marginBottom: 30, marginTop: 10 },
+  greeting: { color: '#a1a1aa', fontSize: 16, marginBottom: 4 },
+  name: { color: '#ffffff', fontSize: 28, fontWeight: 'bold' },
+  sectionTitle: { color: '#ffffff', fontSize: 18, fontWeight: 'bold', marginBottom: 15 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 15 },
+  card: { backgroundColor: '#18181b', borderRadius: 16, padding: 20, width: '47%', borderWidth: 1, borderColor: '#27272a', alignItems: 'center' },
+  icon: { marginBottom: 15 },
+  cardNumber: { color: '#ffffff', fontSize: 24, fontWeight: 'bold', marginBottom: 4 },
+  cardLabel: { color: '#a1a1aa', fontSize: 12, textAlign: 'center' },
+  actionSection: { marginTop: 30 },
+  actionButton: { backgroundColor: '#0ea5e9', flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 12, marginBottom: 12 },
+  actionButtonText: { color: '#ffffff', fontSize: 16, fontWeight: 'bold', marginLeft: 12 },
 });
