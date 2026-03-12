@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, Switch } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Switch, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store/authStore';
 import api from '../../lib/api';
+import * as Haptics from 'expo-haptics';
+import * as LocalAuthentication from 'expo-local-authentication';
+import Toast from 'react-native-toast-message';
 
 export default function SettingsScreen() {
   const { user, logout } = useAuthStore();
@@ -14,50 +17,60 @@ export default function SettingsScreen() {
   const [hasPin, setHasPin] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(true);
 
-  // Check if they already have a PIN set up on the backend
   useEffect(() => {
     api.get('/customer/portal/security/pin-status')
       .then(res => setHasPin(res.data.hasPin))
-      .catch(() => console.log("Failed to fetch PIN status"));
+      .catch(() => {});
   }, []);
 
   const handleUpdatePin = async () => {
     if (pin.length < 4 || pin.length > 6) {
-      Alert.alert('Invalid PIN', 'Your Support PIN must be between 4 and 6 digits.');
+      Toast.show({ type: 'error', text1: 'Invalid PIN', text2: 'PIN must be between 4 and 6 digits.' });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
+    }
+
+    // FACE ID / FINGERPRINT CHECK BEFORE SAVING
+    const hasHardware = await LocalAuthentication.hasHardwareAsync();
+    if (hasHardware) {
+      const auth = await LocalAuthentication.authenticateAsync({ promptMessage: 'Verify identity to update PIN' });
+      if (!auth.success) {
+        Toast.show({ type: 'error', text1: 'Authentication Failed', text2: 'Could not verify your identity.' });
+        return;
+      }
     }
 
     setLoading(true);
     try {
       await api.post('/customer/portal/security/pin', { pin });
-      Alert.alert('Success', 'Your Support PIN has been updated securely.');
+      Toast.show({ type: 'success', text1: 'PIN Secured', text2: 'Your Support PIN has been updated.' });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setHasPin(true);
       setPin('');
     } catch (e: any) {
-      Alert.alert('Error', e.response?.data?.message || 'Failed to update PIN.');
+      Toast.show({ type: 'error', text1: 'Error', text2: e.response?.data?.message || 'Failed to update PIN.' });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setLoading(false);
     }
   };
 
   const handleRevokeSessions = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     Alert.alert(
-      "Revoke All Devices",
-      "This will immediately sign you out of the web portal and any other devices. Your current session on this phone will remain active. Continue?",
+      "Revoke All Devices", 
+      "Log out of all other web and mobile sessions?", 
       [
         { text: "Cancel", style: "cancel" },
         { 
-          text: "Revoke Devices", 
-          style: "destructive",
+          text: "Revoke", 
+          style: "destructive", 
           onPress: async () => {
             try {
-              // Assuming your backend has a standard session revocation route. 
-              // If it's located elsewhere, just update this endpoint!
               await api.delete('/auth/sessions'); 
-              Alert.alert('Secured', 'All other devices and web browsers have been logged out.');
-            } catch (e: any) {
-              console.log("Session revoke notice:", e.message);
-              Alert.alert('Notice', 'Endpoint connected. Ensure backend /auth/sessions route supports DELETE.');
+              Toast.show({ type: 'success', text1: 'Secured', text2: 'All other devices logged out.' });
+            } catch (e) {
+              Toast.show({ type: 'info', text1: 'Notice', text2: 'Ensure backend supports DELETE /auth/sessions' });
             }
           }
         }
@@ -66,21 +79,19 @@ export default function SettingsScreen() {
   };
 
   const handleLogout = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     Alert.alert(
-      "Log Out",
-      "Are you sure you want to log out of the Client Portal?",
+      "Log Out", 
+      "Log out of the Client Portal?", 
       [
         { text: "Cancel", style: "cancel" },
         { 
           text: "Log Out", 
-          style: "destructive",
+          style: "destructive", 
           onPress: async () => {
-            try {
-              await api.post('/auth/logout').catch(() => {});
-            } finally {
-              await logout();
-              router.replace('/');
-            }
+            await api.post('/auth/logout').catch(() => {});
+            await logout();
+            router.replace('/');
           }
         }
       ]
@@ -114,7 +125,10 @@ export default function SettingsScreen() {
         <Text style={styles.description}>Manage your team members and company details.</Text>
         <TouchableOpacity 
           style={[styles.button, { backgroundColor: '#8b5cf6' }]} 
-          onPress={() => router.push('/organization')}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            router.push('/organization');
+          }}
         >
           <Text style={styles.buttonText}>Manage Organization</Text>
         </TouchableOpacity>
@@ -128,7 +142,6 @@ export default function SettingsScreen() {
             <Ionicons name="lock-closed" size={20} color="#0ea5e9" />
             <Text style={styles.cardTitle}>Live Support PIN</Text>
           </View>
-          {/* THE NEW ACTIVE FLAG */}
           {hasPin && (
             <View style={styles.activeBadge}>
               <Ionicons name="checkmark-circle" size={14} color="#22c55e" style={{marginRight: 4}} />
@@ -189,7 +202,10 @@ export default function SettingsScreen() {
           </View>
           <Switch 
             value={pushEnabled} 
-            onValueChange={setPushEnabled}
+            onValueChange={(v) => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setPushEnabled(v);
+            }}
             trackColor={{ false: '#27272a', true: '#0ea5e9' }}
             thumbColor={'#ffffff'}
           />
@@ -250,5 +266,5 @@ const styles = StyleSheet.create({
   rowLabel: { color: '#ffffff', fontSize: 15 },
   rowValue: { color: '#a1a1aa', fontSize: 14, fontWeight: '500' },
   logoutButton: { flexDirection: 'row', backgroundColor: '#450a0a', padding: 15, borderRadius: 10, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#ef4444' },
-  logoutText: { color: '#ef4444', fontWeight: 'bold', fontSize: 16 },
+  logoutText: { color: '#ef4444', fontWeight: 'bold', fontSize: 16 }
 });

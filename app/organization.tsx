@@ -1,44 +1,65 @@
-import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../lib/api';
+import Toast from 'react-native-toast-message';
+import * as Haptics from 'expo-haptics';
+
+// SKELETON LOADER COMPONENT
+const SkeletonOrg = () => (
+  <View style={styles.container}>
+    <View style={{ height: 100, backgroundColor: '#18181b', borderRadius: 12, margin: 20, opacity: 0.5 }} />
+    <View style={{ height: 200, backgroundColor: '#18181b', borderRadius: 12, marginHorizontal: 20, opacity: 0.5 }} />
+  </View>
+);
 
 export default function OrganizationScreen() {
   const [org, setOrg] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [orgName, setOrgName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
 
   const fetchOrg = () => {
-    setLoading(true);
     api.get('/customer/portal/organization')
       .then(res => setOrg(res.data))
-      .catch(() => setOrg(null)) // 404 means they don't have one
-      .finally(() => setLoading(false));
+      .catch(() => setOrg(null))
+      .finally(() => { 
+        setLoading(false); 
+        setRefreshing(false); 
+      });
   };
 
-  useEffect(() => {
+  useEffect(() => { 
+    fetchOrg(); 
+  }, []);
+
+  const onRefresh = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setRefreshing(true);
     fetchOrg();
   }, []);
 
   const handleCreate = async () => {
     if (!orgName.trim()) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       await api.post('/customer/portal/organization', { name: orgName });
+      Toast.show({ type: 'success', text1: 'Success', text2: 'Organization created!' });
       fetchOrg();
     } catch(err: any) {
-      Alert.alert('Error', err.response?.data?.message || 'Failed to create organization.');
+      Toast.show({ type: 'error', text1: 'Error', text2: err.response?.data?.message || 'Failed to create organization.' });
     }
   };
 
   const handleInvite = () => {
       if (!inviteEmail.trim()) return;
-      // You can hook this up to your actual invite endpoint later
-      Alert.alert('Invite Sent', `An invitation has been sent to ${inviteEmail}.`);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Toast.show({ type: 'success', text1: 'Invite Sent', text2: `An invitation has been sent to ${inviteEmail}.` });
       setInviteEmail('');
   };
 
-  if (loading) return <View style={styles.container}><ActivityIndicator color="#0ea5e9" size="large" style={{ marginTop: 50 }} /></View>;
+  if (loading) return <SkeletonOrg />;
 
   if (!org) {
     return (
@@ -46,14 +67,13 @@ export default function OrganizationScreen() {
         <View style={styles.emptyState}>
           <Ionicons name="business-outline" size={64} color="#0ea5e9" style={{ marginBottom: 20 }} />
           <Text style={styles.emptyTitle}>No Organization Found</Text>
-          <Text style={styles.emptySubtitle}>Become the team lead and invite others to collaborate on projects.</Text>
-          
-          <TextInput
-            style={styles.input}
-            placeholder="Organization Name"
-            placeholderTextColor="#71717a"
-            value={orgName}
-            onChangeText={setOrgName}
+          <Text style={styles.emptySubtitle}>Become the team lead and invite others to collaborate.</Text>
+          <TextInput 
+            style={styles.input} 
+            placeholder="Organization Name" 
+            placeholderTextColor="#71717a" 
+            value={orgName} 
+            onChangeText={setOrgName} 
           />
           <TouchableOpacity style={styles.createButton} onPress={handleCreate}>
             <Text style={styles.createButtonText}>Create Organization</Text>
@@ -64,16 +84,29 @@ export default function OrganizationScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ padding: 20 }}>
-      {/* Header */}
+    <ScrollView 
+      style={styles.container} 
+      contentContainerStyle={{ padding: 20 }}
+      refreshControl={
+        <RefreshControl 
+          refreshing={refreshing} 
+          onRefresh={onRefresh} 
+          tintColor="#0ea5e9" 
+          colors={['#0ea5e9']} 
+          title="Refreshing..." 
+          titleColor="#0ea5e9" 
+        />
+      }
+    >
       <View style={styles.headerCard}>
         <View style={styles.headerTop}>
             <Text style={styles.orgName}>{org.name}</Text>
-            <View style={styles.activeBadge}><Text style={styles.activeBadgeText}>ACTIVE</Text></View>
+            <View style={styles.activeBadge}>
+              <Text style={styles.activeBadgeText}>ACTIVE</Text>
+            </View>
         </View>
       </View>
 
-      {/* Team Members */}
       <Text style={styles.sectionTitle}>Team Members</Text>
       <View style={styles.listCard}>
         {org.contacts?.map((c: any, index: number) => (
@@ -82,25 +115,26 @@ export default function OrganizationScreen() {
               <Text style={styles.memberName}>{c.firstName} {c.lastName}</Text>
               <Text style={styles.memberEmail}>{c.email}</Text>
             </View>
-            <View style={styles.memberBadge}><Text style={styles.memberBadgeText}>Member</Text></View>
+            <View style={styles.memberBadge}>
+              <Text style={styles.memberBadgeText}>Member</Text>
+            </View>
           </View>
         ))}
       </View>
 
-      {/* Invite Section */}
       <Text style={styles.sectionTitle}>Invite Colleague</Text>
       <View style={styles.inviteCard}>
-        <TextInput
-            style={styles.input}
-            placeholder="Colleague's Email Address"
-            placeholderTextColor="#71717a"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            value={inviteEmail}
-            onChangeText={setInviteEmail}
+        <TextInput 
+          style={styles.input} 
+          placeholder="Colleague's Email Address" 
+          placeholderTextColor="#71717a" 
+          keyboardType="email-address" 
+          autoCapitalize="none" 
+          value={inviteEmail} 
+          onChangeText={setInviteEmail} 
         />
         <TouchableOpacity style={styles.inviteButton} onPress={handleInvite}>
-            <Text style={styles.inviteButtonText}>Send Invite</Text>
+          <Text style={styles.inviteButtonText}>Send Invite</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -129,5 +163,5 @@ const styles = StyleSheet.create({
   memberBadgeText: { color: '#a1a1aa', fontSize: 10, fontWeight: 'bold', textTransform: 'uppercase' },
   inviteCard: { backgroundColor: '#18181b', padding: 20, borderRadius: 12, borderWidth: 1, borderColor: '#27272a' },
   inviteButton: { backgroundColor: '#8b5cf6', padding: 15, borderRadius: 10, alignItems: 'center' },
-  inviteButtonText: { color: '#ffffff', fontWeight: 'bold', fontSize: 16 },
+  inviteButtonText: { color: '#ffffff', fontWeight: 'bold', fontSize: 16 }
 });

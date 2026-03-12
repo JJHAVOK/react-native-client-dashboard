@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity
 import { Link, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../../lib/api';
+import * as Haptics from 'expo-haptics';
 
 export default function OrdersScreen() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -21,14 +22,10 @@ export default function OrdersScreen() {
     }
   };
 
-  // Auto-refreshes every time the user taps this tab
-  useFocusEffect(
-    useCallback(() => {
-      fetchOrders();
-    }, [])
-  );
+  useFocusEffect(useCallback(() => { fetchOrders(); }, []));
 
   const onRefresh = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setRefreshing(true);
     fetchOrders();
   }, []);
@@ -49,8 +46,9 @@ export default function OrdersScreen() {
         <ActivityIndicator color="#0ea5e9" size="large" style={{ marginTop: 50 }} />
       ) : (
         <ScrollView 
+          style={{ flex: 1 }} // <-- FIX: Makes the whole screen pullable!
           contentContainerStyle={styles.scrollContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0ea5e9" colors={['#0ea5e9']} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0ea5e9" colors={['#0ea5e9']} title="Refreshing..." titleColor="#0ea5e9" />}
         >
           {orders.length === 0 ? (
             <Text style={styles.emptyText}>No order history found.</Text>
@@ -67,14 +65,9 @@ export default function OrdersScreen() {
                       <Text style={styles.badgeText}>{o.status}</Text>
                     </View>
                   </View>
-                  
                   <View style={styles.footer}>
-                    <Text style={styles.dateText}>
-                      {new Date(o.createdAt).toLocaleDateString()}
-                    </Text>
-                    <Text style={styles.priceText}>
-                      ${Number(o.totalAmount || 0).toFixed(2)}
-                    </Text>
+                    <Text style={styles.dateText}>{new Date(o.createdAt).toLocaleDateString()}</Text>
+                    <Text style={styles.priceText}>${Number(o.totalAmount || 0).toFixed(2)}</Text>
                   </View>
                 </TouchableOpacity>
               </Link>

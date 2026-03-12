@@ -1,44 +1,25 @@
 import { useEffect, useState } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useAuthStore } from '../store/authStore';
-import { View, ActivityIndicator, TouchableOpacity, Text } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import api from '../lib/api';
+import { View, ActivityIndicator, Text } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-
-// Custom Bell Component to fetch unread count
-function NotificationBell() {
-  const router = useRouter();
-  const [unread, setUnread] = useState(0);
-
-  useEffect(() => {
-    // Poll every 15 seconds, just like the web widget!
-    const fetchNotifs = () => {
-      api.get('/notifications').then(res => {
-        setUnread(res.data.filter((n: any) => !n.readAt).length);
-      }).catch(() => {});
-    };
-    fetchNotifs();
-    const interval = setInterval(fetchNotifs, 15000);
-    return () => clearInterval(interval);
-  }, []);
-
-  return (
-    <TouchableOpacity onPress={() => router.push('/notifications')} style={{ marginRight: 15, position: 'relative' }}>
-      <Ionicons name="notifications-outline" size={24} color="#ffffff" />
-      {unread > 0 && (
-        <View style={{ position: 'absolute', right: -4, top: -4, backgroundColor: '#ef4444', borderRadius: 10, width: 16, height: 16, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#18181b' }}>
-          <Text style={{ color: '#fff', fontSize: 9, fontWeight: 'bold' }}>{unread > 9 ? '9+' : unread}</Text>
-        </View>
-      )}
-    </TouchableOpacity>
-  );
-}
+import Toast from 'react-native-toast-message';
+import NetInfo from '@react-native-community/netinfo';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function RootLayout() {
   const { user, isInitialized, initAuth } = useAuthStore();
   const segments = useSegments();
   const router = useRouter();
+  const [isConnected, setIsConnected] = useState(true);
+
+  // Monitor Offline Status
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener(state => {
+      setIsConnected(!!state.isConnected);
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     initAuth();
@@ -47,7 +28,6 @@ export default function RootLayout() {
   useEffect(() => {
     if (!isInitialized) return;
     const onLoginScreen = segments.length === 0 || segments[0] === 'index';
-
     if (user && onLoginScreen) {
       router.replace('/(tabs)/dashboard');
     } else if (!user && !onLoginScreen) {
@@ -64,24 +44,38 @@ export default function RootLayout() {
   }
 
   return (
-    <StatusBar style="light" />
-    <Stack
-      screenOptions={{
-        headerStyle: { backgroundColor: '#18181b' },
-        headerTintColor: '#ffffff',
-        headerTitleStyle: { fontWeight: 'bold' },
-        // INJECTING THE BELL GLOBALLY
-        headerRight: () => (user ? <NotificationBell /> : null),
-      }}
-    >
-      <Stack.Screen name="index" options={{ title: 'PF Client Portal', headerShown: false }} />
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="project/[id]" options={{ title: 'Project Overview' }} />
-      <Stack.Screen name="support/[id]" options={{ title: 'Live Support Chat' }} />
-      <Stack.Screen name="order/[id]" options={{ title: 'Order Details' }} />
-      <Stack.Screen name="support/new" options={{ title: 'Start New Chat', presentation: 'modal' }} />
-      <Stack.Screen name="notifications" options={{ title: 'Alerts', presentation: 'modal' }} />
-      <Stack.Screen name="organization" options={{ title: 'Organization' }} />
-    </Stack>
+    <>
+      <StatusBar style="light" />
+      
+      {/* OFFLINE BANNER */}
+      {!isConnected && (
+        <View style={{ backgroundColor: '#ef4444', paddingTop: 50, paddingBottom: 10, alignItems: 'center', flexDirection: 'row', justifyContent: 'center' }}>
+          <Ionicons name="cloud-offline" size={16} color="#fff" style={{ marginRight: 8 }} />
+          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 14 }}>No Internet Connection</Text>
+        </View>
+      )}
+
+      <Stack
+        screenOptions={{
+          headerStyle: { backgroundColor: '#18181b' },
+          headerTintColor: '#ffffff',
+          headerTitleStyle: { fontWeight: 'bold' },
+        }}
+      >
+        <Stack.Screen name="index" options={{ title: 'PF Client Portal', headerShown: false }} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="project/[id]" options={{ title: 'Project Overview' }} />
+        <Stack.Screen name="support/[id]" options={{ title: 'Live Support Chat' }} />
+        <Stack.Screen name="order/[id]" options={{ title: 'Order Details' }} />
+        <Stack.Screen name="organization" options={{ title: 'Organization' }} />
+        
+        {/* Upgraded to presentation: 'formSheet' for Native Swipeable Bottom Sheets on iOS! */}
+        <Stack.Screen name="support/new" options={{ title: 'Start New Chat', presentation: 'formSheet' }} />
+        <Stack.Screen name="notifications" options={{ title: 'Alerts', presentation: 'formSheet' }} />
+      </Stack>
+      
+      {/* GLOBAL TOAST MOUNT */}
+      <Toast />
+    </>
   );
 }

@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, RefreshControl } from 'react-native';
 import { Link, useFocusEffect, useRouter } from 'expo-router';
 import api from '../../lib/api';
+import * as Haptics from 'expo-haptics';
 
 export default function SupportScreen() {
   const router = useRouter();
@@ -24,6 +25,7 @@ export default function SupportScreen() {
   useFocusEffect(useCallback(() => { fetchTickets(); }, []));
 
   const onRefresh = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setRefreshing(true);
     fetchTickets();
   }, []);
@@ -32,7 +34,6 @@ export default function SupportScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Support Tickets</Text>
-        {/* Wired up the new ticket button! */}
         <TouchableOpacity style={styles.newButton} onPress={() => router.push('/support/new')}>
           <Text style={styles.newButtonText}>+ New</Text>
         </TouchableOpacity>
@@ -42,8 +43,9 @@ export default function SupportScreen() {
         <ActivityIndicator color="#0ea5e9" size="large" style={{ marginTop: 50 }} />
       ) : (
         <ScrollView 
+          style={{ flex: 1 }} // <-- FIX: Makes the whole screen pullable!
           contentContainerStyle={styles.scrollContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0ea5e9" colors={['#0ea5e9']} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0ea5e9" colors={['#0ea5e9']} title="Refreshing..." titleColor="#0ea5e9" />}
         >
           {tickets.length === 0 ? (
             <Text style={styles.emptyText}>No support tickets found.</Text>
@@ -57,13 +59,9 @@ export default function SupportScreen() {
                       <Text style={styles.badgeText}>{t.status}</Text>
                     </View>
                   </View>
-                  
                   <Text style={styles.ticketNumber}>Ticket #{t.ticketNumber}</Text>
-                  
                   <View style={styles.footer}>
-                    <Text style={styles.dateText}>
-                      {new Date(t.createdAt).toLocaleDateString()}
-                    </Text>
+                    <Text style={styles.dateText}>{new Date(t.createdAt).toLocaleDateString()}</Text>
                     <Text style={styles.viewText}>View Chat →</Text>
                   </View>
                 </TouchableOpacity>
@@ -88,7 +86,7 @@ const styles = StyleSheet.create({
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 },
   subject: { color: '#ffffff', fontSize: 16, fontWeight: 'bold', flex: 1, marginRight: 10 },
   badge: { backgroundColor: '#0ea5e9', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  badgeResolved: { backgroundColor: '#22c55e' },
+  badgeResolved: { backgroundColor: '#22c55e' }, 
   badgeText: { color: '#ffffff', fontSize: 10, fontWeight: 'bold' },
   ticketNumber: { color: '#71717a', fontSize: 12, marginBottom: 15 },
   footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#27272a', paddingTop: 12 },

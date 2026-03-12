@@ -3,11 +3,13 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingVi
 import { useLocalSearchParams } from 'expo-router';
 import { io, Socket } from 'socket.io-client';
 import api from '../../lib/api';
-import { useAuthStore } from '../../store/authStore'; // IMPORT THE STORE
+import { useAuthStore } from '../../store/authStore';
+import * as Haptics from 'expo-haptics';
+import Toast from 'react-native-toast-message';
 
 export default function MobileSupportChat() {
   const { id } = useLocalSearchParams();
-  const { token } = useAuthStore(); // GET THE JWT TOKEN
+  const { token } = useAuthStore(); 
   
   const [ticket, setTicket] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
@@ -16,14 +18,13 @@ export default function MobileSupportChat() {
   const [loading, setLoading] = useState(true);
   const scrollViewRef = useRef<ScrollView>(null);
 
-  // 1. Load Initial Ticket Data
   useEffect(() => {
     api.get(`/customer/portal/tickets`)
       .then(res => {
          const found = res.data.find((t: any) => t.id === id);
          if (found) setTicket(found);
       })
-      .catch(err => console.log('Error fetching ticket:', err));
+      .catch(() => Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to fetch ticket info.' }));
 
     api.get(`/customer/portal/tickets/${id}`)
       .then(res => {
@@ -40,21 +41,15 @@ export default function MobileSupportChat() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  // 2. Connect Socket for Live Chat with correctly formatted JWT Injection
   useEffect(() => {
       if (!id || !token) return;
       
       const newSocket = io('https://api.pixelforgedeveloper.com/chat', { 
           transports: ['websocket'], 
-          // FIX: The backend splits by space looking for "Bearer token". 
-          // We must format it exactly how NestJS expects it!
-          auth: { 
-              token: `Bearer ${token}` 
-          },
+          auth: { token: `Bearer ${token}` },
       });
       
       newSocket.on('connect', () => {
-          console.log('Mobile Socket Connected to Ticket:', id);
           newSocket.emit('join_ticket', id);
       });
 
@@ -63,10 +58,6 @@ export default function MobileSupportChat() {
               if (prev.some(x => x.id === msg.id)) return prev;
               return [...prev, msg];
           });
-      });
-
-      newSocket.on('connect_error', (err) => {
-          console.log('Socket Connection Error:', err.message);
       });
 
       setSocket(newSocket);
@@ -78,6 +69,9 @@ export default function MobileSupportChat() {
 
   const handleSend = async () => {
       if (!input.trim()) return; 
+      
+      // HAPTIC THUD WHEN YOU SEND A MESSAGE
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       
       const currentInput = input;
       setInput(''); 
@@ -92,16 +86,12 @@ export default function MobileSupportChat() {
       
       try {
           if (socket && socket.connected) {
-              console.log("Sending via Socket...");
               socket.emit('send_message', { ticketId: id, content: currentInput });
           } else {
-              console.log("Socket disconnected. Falling back to REST...");
-              await api.post(`/customer/portal/tickets/${id}/messages`, { 
-                  content: currentInput 
-              });
+              await api.post(`/customer/portal/tickets/${id}/messages`, { content: currentInput });
           }
       } catch (error: any) {
-          console.log('Failed to send message:', error.response?.data || error.message);
+          Toast.show({ type: 'error', text1: 'Message Failed', text2: 'Could not send message. Please try again.' });
       }
   };
 
@@ -143,7 +133,6 @@ export default function MobileSupportChat() {
         })}
       </ScrollView>
 
-      {/* Input Area */}
       {ticket.status !== 'CLOSED' && ticket.status !== 'RESOLVED' && (
         <View style={styles.inputContainer}>
           <TextInput

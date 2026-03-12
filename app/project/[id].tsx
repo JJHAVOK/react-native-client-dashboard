@@ -1,31 +1,72 @@
-import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import api from '../../lib/api';
+import * as Haptics from 'expo-haptics';
+
+// SKELETON
+const SkeletonProject = () => (
+  <View style={styles.container}>
+    <View style={{ height: 60, backgroundColor: '#18181b', margin: 20, borderRadius: 8, opacity: 0.5 }} />
+    <View style={{ height: 200, backgroundColor: '#18181b', marginHorizontal: 20, borderRadius: 8, opacity: 0.5 }} />
+  </View>
+);
 
 export default function MobileProjectDetail() {
   const { id } = useLocalSearchParams();
   const [project, setProject] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
+  const fetchProject = () => {
     api.get('/customer/portal/projects')
-      .then(res => {
-         const found = res.data.find((p: any) => p.id === id);
-         setProject(found);
-      })
-      .catch(err => console.log('Error fetching project:', err))
-      .finally(() => setLoading(false));
+      .then(res => setProject(res.data.find((p: any) => p.id === id)))
+      .catch(() => {})
+      .finally(() => { 
+        setLoading(false); 
+        setRefreshing(false); 
+      });
+  };
+
+  useEffect(() => { 
+    fetchProject(); 
   }, [id]);
 
-  if (loading) return <View style={styles.container}><ActivityIndicator color="#0ea5e9" size="large" style={{ marginTop: 50 }} /></View>;
-  if (!project) return <View style={styles.container}><Text style={styles.errorText}>Project not found.</Text></View>;
+  const onRefresh = useCallback(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setRefreshing(true);
+    fetchProject();
+  }, [id]);
+
+  if (loading) return <SkeletonProject />;
+  
+  if (!project) {
+      return (
+          <View style={styles.container}>
+              <Text style={styles.errorText}>Project not found.</Text>
+          </View>
+      );
+  }
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView 
+      style={styles.container}
+      refreshControl={
+        <RefreshControl 
+          refreshing={refreshing} 
+          onRefresh={onRefresh} 
+          tintColor="#0ea5e9" 
+          colors={['#0ea5e9']} 
+          title="Refreshing..." 
+          titleColor="#0ea5e9" 
+        />
+      }
+    >
       <View style={styles.header}>
         <Text style={styles.headerTitle}>{project.name}</Text>
-        <View style={styles.badge}><Text style={styles.badgeText}>{project.status}</Text></View>
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>{project.status}</Text>
+        </View>
       </View>
 
       <View style={styles.section}>
@@ -44,13 +85,10 @@ export default function MobileProjectDetail() {
       </View>
 
       <View style={styles.section}>
-        {/* Added a flex row to put the swipe hint next to the title */}
         <View style={styles.boardHeader}>
-            <Text style={styles.sectionTitle}>Progress Board</Text>
-            <Text style={styles.swipeHint}>Swipe ↔️</Text>
+          <Text style={styles.sectionTitle}>Progress Board</Text>
+          <Text style={styles.swipeHint}>Swipe ↔️</Text>
         </View>
-        
-        {/* Turned on the horizontal scroll indicator */}
         <ScrollView horizontal showsHorizontalScrollIndicator={true} style={{ paddingBottom: 20 }}>
           {project.columns?.filter((col: any) => col.isPublic).map((col: any) => (
             <View key={col.id} style={styles.column}>
@@ -64,7 +102,7 @@ export default function MobileProjectDetail() {
             </View>
           ))}
           {(!project.columns || project.columns.filter((col: any) => col.isPublic).length === 0) && (
-             <Text style={styles.emptyText}>No board columns setup yet.</Text>
+            <Text style={styles.emptyText}>No board setup yet.</Text>
           )}
         </ScrollView>
       </View>
@@ -72,28 +110,25 @@ export default function MobileProjectDetail() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#09090b' },
-  header: { padding: 20, borderBottomWidth: 1, borderBottomColor: '#27272a', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  headerTitle: { color: '#ffffff', fontSize: 20, fontWeight: 'bold', flex: 1 },
-  badge: { backgroundColor: '#0ea5e9', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginLeft: 10 },
-  badgeText: { color: '#ffffff', fontSize: 12, fontWeight: 'bold' },
-  section: { padding: 20, borderBottomWidth: 1, borderBottomColor: '#27272a' },
-  boardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 15 },
-  sectionTitle: { color: '#ffffff', fontSize: 18, fontWeight: 'bold' },
-  swipeHint: { color: '#71717a', fontSize: 12, fontWeight: 'bold' },
-  emptyText: { color: '#71717a' },
-  updateCard: { backgroundColor: '#18181b', padding: 15, borderRadius: 8, marginBottom: 10, borderWidth: 1, borderColor: '#27272a' },
-  updateTitle: { color: '#ffffff', fontWeight: 'bold', fontSize: 16 },
-  updateDate: { color: '#0ea5e9', fontSize: 12, marginBottom: 5 },
-  updateDesc: { color: '#a1a1aa', fontSize: 14 },
-  
-  // Widened the column to 280 so the next card peeks onto the screen
-  column: { backgroundColor: '#18181b', padding: 10, borderRadius: 8, width: 280, marginRight: 15, borderWidth: 1, borderColor: '#27272a' },
-  
-  columnTitle: { color: '#ffffff', fontWeight: 'bold', marginBottom: 10, textAlign: 'center' },
-  taskCard: { backgroundColor: '#27272a', padding: 10, borderRadius: 6, marginBottom: 8 },
-  taskTitle: { color: '#ffffff', fontSize: 14, fontWeight: '500' },
-  taskPriority: { color: '#a1a1aa', fontSize: 10, marginTop: 4 },
-  errorText: { color: '#ef4444', textAlign: 'center', marginTop: 50 },
+const styles = StyleSheet.create({ 
+  container: { flex: 1, backgroundColor: '#09090b' }, 
+  header: { padding: 20, borderBottomWidth: 1, borderBottomColor: '#27272a', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, 
+  headerTitle: { color: '#ffffff', fontSize: 20, fontWeight: 'bold', flex: 1 }, 
+  badge: { backgroundColor: '#0ea5e9', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginLeft: 10 }, 
+  badgeText: { color: '#ffffff', fontSize: 12, fontWeight: 'bold' }, 
+  section: { padding: 20, borderBottomWidth: 1, borderBottomColor: '#27272a' }, 
+  boardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 15 }, 
+  sectionTitle: { color: '#ffffff', fontSize: 18, fontWeight: 'bold' }, 
+  swipeHint: { color: '#71717a', fontSize: 12, fontWeight: 'bold' }, 
+  emptyText: { color: '#71717a' }, 
+  updateCard: { backgroundColor: '#18181b', padding: 15, borderRadius: 8, marginBottom: 10, borderWidth: 1, borderColor: '#27272a' }, 
+  updateTitle: { color: '#ffffff', fontWeight: 'bold', fontSize: 16 }, 
+  updateDate: { color: '#0ea5e9', fontSize: 12, marginBottom: 5 }, 
+  updateDesc: { color: '#a1a1aa', fontSize: 14 }, 
+  column: { backgroundColor: '#18181b', padding: 10, borderRadius: 8, width: 280, marginRight: 15, borderWidth: 1, borderColor: '#27272a' }, 
+  columnTitle: { color: '#ffffff', fontWeight: 'bold', marginBottom: 10, textAlign: 'center' }, 
+  taskCard: { backgroundColor: '#27272a', padding: 10, borderRadius: 6, marginBottom: 8 }, 
+  taskTitle: { color: '#ffffff', fontSize: 14, fontWeight: '500' }, 
+  taskPriority: { color: '#a1a1aa', fontSize: 10, marginTop: 4 }, 
+  errorText: { color: '#ef4444', textAlign: 'center', marginTop: 50 } 
 });

@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store/authStore';
 import api from '../../lib/api';
+import * as Haptics from 'expo-haptics';
 
 export default function DashboardScreen() {
   const { user } = useAuthStore();
@@ -11,7 +12,7 @@ export default function DashboardScreen() {
   
   const [stats, setStats] = useState({ activeProjects: 0, openTickets: 0, recentOrders: 0 });
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false); // NEW REFRESH STATE
+  const [refreshing, setRefreshing] = useState(false);
 
   const fetchDashboardData = async () => {
     try {
@@ -30,7 +31,7 @@ export default function DashboardScreen() {
       console.log('Error fetching dashboard data:', error);
     } finally {
       setLoading(false);
-      setRefreshing(false); // Stop the refresh spinner
+      setRefreshing(false);
     }
   };
 
@@ -38,8 +39,9 @@ export default function DashboardScreen() {
     fetchDashboardData();
   }, []);
 
-  // THE PULL-TO-REFRESH HANDLER
   const onRefresh = useCallback(() => {
+    // UPGRADED TO MEDIUM SO YOU CAN FEEL IT
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setRefreshing(true);
     fetchDashboardData();
   }, []);
@@ -54,15 +56,16 @@ export default function DashboardScreen() {
 
   return (
     <ScrollView 
-      style={styles.container}
-      contentContainerStyle={{ padding: 20 }}
-      // THE NATIVE REFRESH CONTROL
+      style={styles.container} // <-- FIX: This turns the background black again!
+      contentContainerStyle={styles.scrollContent}
       refreshControl={
         <RefreshControl 
           refreshing={refreshing} 
           onRefresh={onRefresh} 
-          tintColor="#0ea5e9" // Spinner color for iOS
-          colors={['#0ea5e9']} // Spinner color for Android
+          tintColor="#0ea5e9" 
+          colors={['#0ea5e9']} 
+          title="Refreshing..."
+          titleColor="#0ea5e9"
         />
       }
     >
@@ -110,6 +113,7 @@ export default function DashboardScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#09090b' },
+  scrollContent: { padding: 20 },
   header: { marginBottom: 30, marginTop: 10 },
   greeting: { color: '#a1a1aa', fontSize: 16, marginBottom: 4 },
   name: { color: '#ffffff', fontSize: 28, fontWeight: 'bold' },
